@@ -1,0 +1,20 @@
+{
+  "contentDir": "content/status",
+  "editor": "code --wait",
+  "filename": {
+    "format": "date-slug",
+    "dateFormat": "yyyy-MM-dd",
+    "maxSlugLength": 60
+  },
+  "frontmatter": {
+    "defaults": {
+      "status": "note"
+    }
+  },
+  "plugins": [
+    {
+      "name": "github",
+      "enabled": true
+    }
+  ]
+}

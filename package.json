@@ -1,0 +1,58 @@
+{
+  "name": "@jeroenvanwissen/nanopost",
+  "version": "0.1.0",
+  "description": "Write tiny thoughts. Commit them to your repo.",
+  "packageManager": "pnpm@10.15.0",
+  "bin": {
+    "nanopost": "dist/cli.js"
+  },
+  "type": "commonjs",
+  "main": "dist/cli.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/cli.ts",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "cli",
+    "markdown",
+    "frontmatter",
+    "notes",
+    "blog",
+    "microblog",
+    "git"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "prompts": "^2.4.2",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.3.0",
+    "@types/prompts": "^2.4.9",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^10.0.2",
+    "prettier": "^3.8.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
