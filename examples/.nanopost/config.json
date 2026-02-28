@@ -1,14 +1,19 @@
 {
-  "contentDir": "content/status",
+  "defaultType": "status",
   "editor": "code --wait",
-  "filename": {
-    "format": "date-slug",
-    "dateFormat": "yyyy-MM-dd",
-    "maxSlugLength": 60
-  },
-  "frontmatter": {
-    "defaults": {
-      "status": "note"
+  "postTypes": {
+    "status": {
+      "contentDir": "content/status",
+      "dateFormat": "yyyy-MM-dd",
+      "filename": {
+        "format": "date-slug",
+        "maxSlugLength": 60
+      },
+      "frontmatter": {
+        "defaults": {
+          "status": "note"
+        }
+      }
     }
   },
   "plugins": [

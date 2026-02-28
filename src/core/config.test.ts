@@ -21,24 +21,34 @@ describe("readConfig", () => {
   });
 
   it("merges valid config over defaults", () => {
-    const customConfig = { contentDir: "posts" };
+    const customConfig = {
+      defaultType: "default",
+      postTypes: {
+        default: { contentDir: "posts" },
+      },
+    };
     fs.writeFileSync(path.join(tmpDir, "config.json"), JSON.stringify(customConfig), "utf8");
 
     const result = readConfig(tmpDir);
-    expect(result.contentDir).toBe("posts");
+    expect(result.postTypes.default.contentDir).toBe("posts");
     // Defaults still present for unset fields
     expect(result.editor).toBe(DEFAULT_CONFIG.editor);
-    expect(result.filename).toEqual(DEFAULT_CONFIG.filename);
+    expect(result.postTypes.default.filename).toEqual(DEFAULT_CONFIG.postTypes.default.filename);
   });
 
   it("deep merges nested fields", () => {
-    const customConfig = { filename: { maxSlugLength: 30 } };
+    const customConfig = {
+      defaultType: "default",
+      postTypes: {
+        default: { contentDir: "content/posts", filename: { maxSlugLength: 30 } },
+      },
+    };
     fs.writeFileSync(path.join(tmpDir, "config.json"), JSON.stringify(customConfig), "utf8");
 
     const result = readConfig(tmpDir);
-    expect(result.filename?.maxSlugLength).toBe(30);
+    expect(result.postTypes.default.filename?.maxSlugLength).toBe(30);
     // Other nested defaults preserved
-    expect(result.filename?.format).toBe("date-slug");
+    expect(result.postTypes.default.filename?.format).toBe("date-slug");
   });
 
   it("throws on invalid JSON with clear message", () => {
@@ -48,26 +58,34 @@ describe("readConfig", () => {
   });
 
   it("throws when contentDir is not a string", () => {
-    fs.writeFileSync(path.join(tmpDir, "config.json"), JSON.stringify({ contentDir: 42 }), "utf8");
+    const badConfig = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: 42 } },
+    };
+    fs.writeFileSync(path.join(tmpDir, "config.json"), JSON.stringify(badConfig), "utf8");
 
     expect(() => readConfig(tmpDir)).toThrow("contentDir must be a non-empty string");
   });
 
   it("throws when contentDir is empty string", () => {
-    fs.writeFileSync(path.join(tmpDir, "config.json"), JSON.stringify({ contentDir: "" }), "utf8");
+    const badConfig = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "" } },
+    };
+    fs.writeFileSync(path.join(tmpDir, "config.json"), JSON.stringify(badConfig), "utf8");
 
     expect(() => readConfig(tmpDir)).toThrow("contentDir must be a non-empty string");
   });
 
   it("accepts minimal valid config", () => {
-    fs.writeFileSync(
-      path.join(tmpDir, "config.json"),
-      JSON.stringify({ contentDir: "my-posts" }),
-      "utf8",
-    );
+    const minimalConfig = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "my-posts" } },
+    };
+    fs.writeFileSync(path.join(tmpDir, "config.json"), JSON.stringify(minimalConfig), "utf8");
 
     const result = readConfig(tmpDir);
-    expect(result.contentDir).toBe("my-posts");
+    expect(result.postTypes.default.contentDir).toBe("my-posts");
   });
 });
 
@@ -80,43 +98,76 @@ describe("validateConfig", () => {
   });
 
   it("accepts an empty object", () => {
-    expect(() => validateConfig({})).not.toThrow();
+    // Empty object should fail validation - requires postTypes
+    expect(() => validateConfig({})).toThrow("postTypes is required");
   });
 
   it("throws when editor is not a string", () => {
-    expect(() => validateConfig({ editor: 123 })).toThrow("editor must be a string");
+    const badConfig = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "posts" } },
+      editor: 123,
+    };
+    expect(() => validateConfig(badConfig)).toThrow("editor must be a string");
   });
 
   it("throws when filename is not an object", () => {
-    expect(() => validateConfig({ filename: "bad" })).toThrow("filename must be an object");
+    const badConfig = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "posts", filename: "bad" } },
+    };
+    expect(() => validateConfig(badConfig)).toThrow("filename must be an object");
   });
 
   it("throws when filename.maxSlugLength is not a positive number", () => {
-    expect(() => validateConfig({ filename: { maxSlugLength: -5 } })).toThrow(
+    const badConfig1 = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "posts", filename: { maxSlugLength: -5 } } },
+    };
+    const badConfig2 = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "posts", filename: { maxSlugLength: 0 } } },
+    };
+    const badConfig3 = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "posts", filename: { maxSlugLength: "ten" as any } } },
+    };
+    expect(() => validateConfig(badConfig1)).toThrow(
       "filename.maxSlugLength must be a positive number",
     );
-    expect(() => validateConfig({ filename: { maxSlugLength: 0 } })).toThrow(
+    expect(() => validateConfig(badConfig2)).toThrow(
       "filename.maxSlugLength must be a positive number",
     );
-    expect(() => validateConfig({ filename: { maxSlugLength: "ten" } })).toThrow(
+    expect(() => validateConfig(badConfig3)).toThrow(
       "filename.maxSlugLength must be a positive number",
     );
   });
 
   it("throws when plugins is not an array", () => {
-    expect(() => validateConfig({ plugins: "bad" })).toThrow("plugins must be an array");
+    const badConfig = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "posts" } },
+      plugins: "bad",
+    };
+    expect(() => validateConfig(badConfig)).toThrow("plugins must be an array");
   });
 
   it("throws when a plugin is missing a name", () => {
-    expect(() => validateConfig({ plugins: [{ enabled: true }] })).toThrow(
-      'plugins[0] must have a "name" string',
-    );
+    const badConfig = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "posts" } },
+      plugins: [{ enabled: true }],
+    };
+    expect(() => validateConfig(badConfig)).toThrow('plugins[0] must have a "name" string');
   });
 
   it("accepts valid plugins array", () => {
-    expect(() =>
-      validateConfig({ plugins: [{ name: "test-plugin", enabled: true }] }),
-    ).not.toThrow();
+    const validConfig = {
+      defaultType: "default",
+      postTypes: { default: { contentDir: "posts" } },
+      plugins: [{ name: "test-plugin", enabled: true }],
+    };
+    expect(() => validateConfig(validConfig)).not.toThrow();
   });
 });
 
@@ -132,11 +183,16 @@ describe("writeConfig", () => {
   });
 
   it("writes config and readConfig round-trips it", () => {
-    const config = { ...DEFAULT_CONFIG, contentDir: "my-notes" };
+    const config = {
+      ...DEFAULT_CONFIG,
+      postTypes: {
+        default: { ...DEFAULT_CONFIG.postTypes.default, contentDir: "my-notes" },
+      },
+    };
     writeConfig(tmpDir, config);
 
     const result = readConfig(tmpDir);
-    expect(result.contentDir).toBe("my-notes");
+    expect(result.postTypes.default.contentDir).toBe("my-notes");
     expect(result.editor).toBe(DEFAULT_CONFIG.editor);
   });
 

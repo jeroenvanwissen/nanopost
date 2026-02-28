@@ -9,6 +9,7 @@ export type Post = {
   date: string;
   body: string;
   path: string;
+  frontmatter: Record<string, unknown>;
 };
 
 /** Scans the content directory for Markdown posts, sorted newest-first. */
@@ -26,7 +27,7 @@ export function scanPosts(contentDir: string): Post[] {
     const date = extractDate(file, frontmatter);
     const title = typeof frontmatter.title === "string" ? frontmatter.title : titleFromFile(file);
 
-    posts.push({ file, title, date, body, path: filePath });
+    posts.push({ file, title, date, body, path: filePath, frontmatter });
   }
 
   posts.sort((a, b) => b.date.localeCompare(a.date));

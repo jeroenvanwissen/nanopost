@@ -51,7 +51,7 @@ describe("scanPosts", () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nanopost-posts-test-"));
-    contentDir = path.join(tmpDir, "content", "status");
+    contentDir = path.join(tmpDir, "content", "posts");
     fs.mkdirSync(contentDir, { recursive: true });
   });
 
@@ -110,7 +110,7 @@ describe("scanPosts", () => {
   it("derives title from filename when frontmatter has no title", () => {
     fs.writeFileSync(
       path.join(contentDir, "2024-01-15-my-great-post.md"),
-      "---\nstatus: note\n---\n\nBody",
+      "---\ntype: note\n---\n\nBody",
       "utf8",
     );
 

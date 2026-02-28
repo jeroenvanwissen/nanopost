@@ -55,12 +55,12 @@ Input precedence:
 
 Flags:
 
-- `--title <string>`
-- `--status <string>`
-- `--tags <a,b,c>`
-- `--edit`
-- `--dry-run`
-- `--no-publish`
+- `--title <string>` - Override post title
+- `--tags <a,b,c>` - Comma-separated tags
+- `--type <type>` - Specify post type (e.g., blog, devlog)
+- `--edit` - Open editor for body content
+- `--dry-run` - Print output without writing file
+- `--no-publish` - Skip running plugins
 
 ## Output
 
@@ -75,8 +75,193 @@ Frontmatter always includes:
 
 Optional:
 
-- `status`
 - `tags`
+- Any fields defined in `frontmatter.defaults`
+
+## Configuration
+
+The `.nanopost/config.json` file controls how posts are created and formatted.
+
+### Post Types
+
+Nanopost supports multiple post types, allowing you to organize different kinds of content with distinct settings. Each post type can have its own:
+
+- Content directory
+- Filename format
+- Frontmatter schema and defaults
+- Date format
+
+**Example configuration:**
+
+```json
+{
+  "defaultType": "blog",
+  "editor": "code --wait",
+  "postTypes": {
+    "blog": {
+      "contentDir": "content/blog",
+      "dateFormat": "yyyy-MM-dd",
+      "filename": {
+        "format": "{date}-{title}",
+        "maxSlugLength": 60
+      },
+      "frontmatter": {
+        "schema": {
+          "title": "string",
+          "date": "date",
+          "author": "string",
+          "tags": "array",
+          "draft": "boolean"
+        },
+        "defaults": {
+          "author": "Your Name",
+          "draft": false,
+          "tags": []
+        }
+      }
+    },
+    "devlog": {
+      "contentDir": "content/devlog",
+      "filename": {
+        "format": "{date}-devlog-{slug}",
+        "maxSlugLength": 40
+      },
+      "frontmatter": {
+        "defaults": {
+          "progress": "in-progress",
+          "hours": 0
+        }
+      }
+    }
+  },
+  "plugins": []
+}
+```
+
+**Creating posts with types:**
+
+```bash
+# Interactive - prompts for type selection
+nanopost new
+
+# Specify type via flag
+nanopost new --type=devlog "Fixed the database bug"
+
+# Quick post with default type
+echo "New feature released" | nanopost
+```
+
+**Listing and filtering by type:**
+
+```bash
+# List all posts from all types
+nanopost list
+
+# List only devlog posts
+nanopost list --type=devlog
+
+# Show most recent post of any type
+nanopost last
+
+# Show most recent devlog post
+nanopost last --type=devlog
+```
+
+See [examples/multi-type-config.json](examples/multi-type-config.json) for a complete example.
+
+### Filename Format
+
+You can customize the filename format using variables:
+
+```json
+{
+  "filename": {
+    "format": "{date}-{title}",
+    "maxSlugLength": 40
+  }
+}
+```
+
+**Supported variables:**
+
+- `{date}` - The post date (YYYY-MM-DD format)
+- `{title}` - The post title (automatically slugified)
+- `{slug}` - Same as title (for clarity)
+- Any frontmatter field name
+
+**Examples:**
+
+- `"{date}-{title}"` → `2023-01-01-my-post.md`
+- `"{date}-{type}-{title}"` → `2023-01-01-devlog-my-post.md`
+
+Legacy format `"date-slug"` is still supported for backward compatibility.
+
+### Frontmatter Schema
+
+Define field types to ensure proper YAML formatting:
+
+```json
+{
+  "frontmatter": {
+    "schema": {
+      "title": "string",
+      "date": "date",
+      "description": "string",
+      "type": "string",
+      "categories": "array",
+      "draft": "boolean"
+    },
+    "defaults": {
+      "type": "devlog",
+      "categories": [],
+      "draft": true,
+      "description": ""
+    }
+  }
+}
+```
+
+**Supported types:**
+
+- `"string"` - Text values (quoted in YAML if needed)
+- `"boolean"` - `true` or `false` (not quoted)
+- `"number"` - Numeric values (not quoted)
+- `"array"` - YAML arrays (e.g., `- item1`)
+- `"date"` - Date strings (not quoted)
+- `"object"` - Nested objects
+
+**Why use schema types?**
+
+Without schema types, all values are treated as strings:
+
+```yaml
+draft: "true" # ❌ string, not boolean
+```
+
+With schema types:
+
+```yaml
+draft: true # ✅ actual boolean
+```
+
+This is especially important for static site generators that expect specific types (e.g., Astro, Hugo, Jekyll).
+
+**Example output:**
+
+```yaml
+---
+categories:
+  - Website
+  - Feature
+date: 2023-01-01
+description: "Launched new website built with Astro.build."
+draft: false
+title: New Year, New Website
+type: devlog
+---
+```
+
+See [examples/multi-type-config.json](examples/multi-type-config.json) for a complete example with multiple post types.
 
 ## Plugins (optional)
 
@@ -141,6 +326,29 @@ Register plugins in `.nanopost/config.json`:
 | `onPostSaved` | After a new post is written to disk |
 
 Hooks can be synchronous or async (return a `Promise`). Plugins run sequentially in the order they appear in the `plugins` array.
+
+### Plugin API Reference
+
+**NanopostPlugin Interface:**
+
+| Property      | Type                                               | Required | Description                |
+| ------------- | -------------------------------------------------- | -------- | -------------------------- |
+| `name`        | `string`                                           | Yes      | Plugin identifier          |
+| `onPostSaved` | `(ctx: PostSavedContext) => Promise<void> \| void` | No       | Hook after post is written |
+
+**PostSavedContext:**
+
+| Field          | Type                        | Description                     |
+| -------------- | --------------------------- | ------------------------------- |
+| `filePath`     | `string`                    | Absolute path to saved .md file |
+| `frontmatter`  | `Record<string, unknown>`   | Parsed frontmatter object       |
+| `body`         | `string`                    | Post body text (no frontmatter) |
+| `projectRoot`  | `string`                    | Absolute path to project root   |
+| `nanopostDir`  | `string`                    | Absolute path to .nanopost/     |
+| `config`       | `NanopostConfig`            | Full config object              |
+| `pluginConfig` | `PluginConfig \| undefined` | This plugin's config entry      |
+
+See [docs/plugins.md](docs/plugins.md) for complete examples and best practices.
 
 ### Error behavior
 

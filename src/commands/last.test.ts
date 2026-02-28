@@ -10,16 +10,23 @@ function createTmpProject(): string {
   fs.mkdirSync(nanopostDir, { recursive: true });
   fs.writeFileSync(
     path.join(nanopostDir, "config.json"),
-    JSON.stringify({ contentDir: "content/status" }),
+    JSON.stringify({
+      defaultType: "default",
+      postTypes: {
+        default: {
+          contentDir: "content/posts",
+        },
+      },
+    }),
     "utf8",
   );
-  const contentDir = path.join(tmpDir, "content", "status");
+  const contentDir = path.join(tmpDir, "content", "posts");
   fs.mkdirSync(contentDir, { recursive: true });
   return tmpDir;
 }
 
 function writePost(tmpDir: string, filename: string, title: string, body: string): void {
-  const contentDir = path.join(tmpDir, "content", "status");
+  const contentDir = path.join(tmpDir, "content", "posts");
   fs.writeFileSync(path.join(contentDir, filename), `---\ntitle: ${title}\n---\n\n${body}`, "utf8");
 }
 
@@ -55,7 +62,7 @@ describe("cmdLast", () => {
 
     const output = logSpy.mock.calls[0][0] as string;
     expect(output).toContain("2024-01-15-hello.md");
-    expect(output).toContain(path.join("content", "status"));
+    expect(output).toContain(path.join("content", "posts"));
   });
 
   it("outputs valid JSON with --json", () => {

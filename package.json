@@ -1,6 +1,6 @@
 {
   "name": "@jeroenvanwissen/nanopost",
-  "version": "0.1.0",
+  "version": "0.2.3",
   "description": "Write tiny thoughts. Commit them to your repo.",
   "packageManager": "pnpm@10.15.0",
   "bin": {
@@ -21,7 +21,9 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "audit": "pnpm audit",
+    "prepare": "husky"
   },
   "keywords": [
     "cli",
@@ -44,7 +46,10 @@
     "@types/prompts": "^2.4.9",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^10.0.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.0",
     "prettier": "^3.8.1",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
@@ -54,5 +59,14 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml}": [
+      "prettier --write"
+    ]
   }
 }

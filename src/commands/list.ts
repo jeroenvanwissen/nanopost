@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readConfig } from "../core/config";
+import { readConfig, getPostTypes } from "../core/config";
 import { findNanopostDir, findProjectRoot } from "../core/paths";
 import { scanPosts, type Post } from "../core/posts";
 
@@ -8,6 +8,7 @@ export type ListOptions = {
   limit?: number;
   json?: boolean;
   grep?: string;
+  type?: string;
 };
 
 /** Lists posts sorted by date (newest first), with optional filtering. */
@@ -21,9 +22,34 @@ export function cmdList(cwd: string, opts: ListOptions): void {
 
   const projectRoot = findProjectRoot(cwd) ?? path.dirname(nanopostDir);
   const config = readConfig(nanopostDir);
-  const contentDir = path.resolve(projectRoot, config.contentDir);
 
-  let posts = scanPosts(contentDir);
+  const allPosts: Post[] = [];
+
+  // Scan all post types or filter by type
+  const postTypes = getPostTypes(config);
+  const typesToScan = opts.type ? [opts.type] : postTypes;
+
+  for (const typeName of typesToScan) {
+    if (!config.postTypes[typeName]) {
+      console.error(`Error: Post type "${typeName}" not found in configuration.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    const typeConfig = config.postTypes[typeName];
+    const contentDir = path.resolve(projectRoot, typeConfig.contentDir);
+    const posts = scanPosts(contentDir);
+    allPosts.push(...posts);
+  }
+
+  // Sort by date descending (newest first)
+  allPosts.sort((a, b) => {
+    const dateA = new Date(a.date);
+    const dateB = new Date(b.date);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  let posts = allPosts;
   posts = applyGrep(posts, opts.grep);
   posts = applyLimit(posts, opts.limit);
 
@@ -38,7 +64,8 @@ export function cmdList(cwd: string, opts: ListOptions): void {
   }
 
   for (const post of posts) {
-    console.log(`${post.date}  ${post.title}`);
+    const typeInfo = post.frontmatter?.type ? ` [${post.frontmatter.type}]` : "";
+    console.log(`${post.date}  ${post.title}${typeInfo}`);
   }
 }
 

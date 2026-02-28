@@ -14,10 +14,21 @@ function setupValidProject(tmpDir: string): void {
   fs.mkdirSync(path.join(nanopostDir, "plugins"), { recursive: true });
   fs.writeFileSync(
     path.join(nanopostDir, "config.json"),
-    JSON.stringify({ contentDir: "content/status" }, null, 2),
+    JSON.stringify(
+      {
+        defaultType: "default",
+        postTypes: {
+          default: {
+            contentDir: "content/posts",
+          },
+        },
+      },
+      null,
+      2,
+    ),
     "utf8",
   );
-  fs.mkdirSync(path.join(tmpDir, "content", "status"), { recursive: true });
+  fs.mkdirSync(path.join(tmpDir, "content", "posts"), { recursive: true });
 }
 
 describe("cmdDoctor", () => {
@@ -81,7 +92,14 @@ describe("cmdDoctor", () => {
     fs.mkdirSync(nanopostDir, { recursive: true });
     fs.writeFileSync(
       path.join(nanopostDir, "config.json"),
-      JSON.stringify({ contentDir: "content/status" }),
+      JSON.stringify({
+        defaultType: "default",
+        postTypes: {
+          default: {
+            contentDir: "content/posts",
+          },
+        },
+      }),
       "utf8",
     );
 
@@ -98,7 +116,12 @@ describe("cmdDoctor", () => {
     fs.writeFileSync(
       path.join(nanopostDir, "config.json"),
       JSON.stringify({
-        contentDir: "content/status",
+        defaultType: "default",
+        postTypes: {
+          default: {
+            contentDir: "content/posts",
+          },
+        },
         plugins: [{ name: "nonexistent", enabled: true }],
       }),
       "utf8",

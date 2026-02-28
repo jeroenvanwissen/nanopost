@@ -1,0 +1,67 @@
+{
+  "defaultType": "blog",
+  "editor": "code --wait",
+  "postTypes": {
+    "blog": {
+      "contentDir": "content/blog",
+      "dateFormat": "yyyy-MM-dd",
+      "filename": {
+        "format": "{date}-{title}",
+        "maxSlugLength": 60
+      },
+      "frontmatter": {
+        "schema": {
+          "title": "string",
+          "date": "date",
+          "author": "string",
+          "tags": "array",
+          "draft": "boolean",
+          "type": "string"
+        },
+        "defaults": {
+          "author": "Your Name",
+          "draft": false,
+          "tags": []
+        }
+      }
+    },
+    "devlog": {
+      "contentDir": "content/devlog",
+      "dateFormat": "yyyy-MM-dd",
+      "filename": {
+        "format": "{date}-devlog-{slug}",
+        "maxSlugLength": 40
+      },
+      "frontmatter": {
+        "schema": {
+          "title": "string",
+          "date": "date",
+          "progress": "string",
+          "hours": "number",
+          "type": "string"
+        },
+        "defaults": {
+          "progress": "in-progress",
+          "hours": 0
+        }
+      }
+    },
+    "note": {
+      "contentDir": "content/notes",
+      "dateFormat": "yyyy-MM-dd",
+      "filename": {
+        "format": "{date}-{slug}",
+        "maxSlugLength": 50
+      },
+      "frontmatter": {
+        "schema": {
+          "title": "string",
+          "date": "date",
+          "type": "string"
+        },
+        "defaults": {}
+      }
+    }
+  },
+  "plugins": []
+}

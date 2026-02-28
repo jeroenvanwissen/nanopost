@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { readConfig, validateConfig, type NanopostConfig } from "../core/config";
+import { readConfig, validateConfig, getPostTypes, type NanopostConfig } from "../core/config";
 import { loadPlugins } from "../core/plugins";
 import { findNanopostDir } from "../core/paths";
 
@@ -88,8 +88,14 @@ function checkConfig(nanopostDir: string): ConfigCheckResult {
 
   const config = readConfig(nanopostDir);
   const projectRoot = path.dirname(nanopostDir);
-  const contentDir = path.resolve(projectRoot, config.contentDir);
-  results.push(checkContentDir(contentDir));
+
+  // Check each post type's contentDir
+  const postTypes = getPostTypes(config);
+  for (const typeName of postTypes) {
+    const typeConfig = config.postTypes[typeName];
+    const contentDir = path.resolve(projectRoot, typeConfig.contentDir);
+    results.push(checkContentDir(contentDir, typeName));
+  }
 
   if (config.editor) {
     results.push(checkEditor(config.editor));
@@ -98,14 +104,23 @@ function checkConfig(nanopostDir: string): ConfigCheckResult {
   return { results, config };
 }
 
-function checkContentDir(contentDir: string): CheckResult {
+function checkContentDir(contentDir: string, typeName?: string): CheckResult {
+  const label = typeName
+    ? `Content directory for "${typeName}": ${contentDir}`
+    : `Content directory: ${contentDir}`;
+
   if (fs.existsSync(contentDir)) {
-    return { label: `Content directory exists: ${contentDir}`, status: "pass" };
+    return { label: `${label} exists`, status: "pass" };
   }
+
+  const hint = typeName
+    ? `Run: mkdir -p ${contentDir}`
+    : "It will be created when you write your first post.";
+
   return {
-    label: `Content directory missing: ${contentDir}`,
+    label: `${label} missing`,
     status: "warn",
-    hint: "It will be created when you write your first post.",
+    hint,
   };
 }
 

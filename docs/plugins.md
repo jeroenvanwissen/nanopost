@@ -80,8 +80,8 @@ The `frontmatter` object contains the same key-value pairs that are written to t
 {
   title: "My post title",
   date: "2026-02-25",
-  status: "note",        // from config defaults or --status flag
-  tags: ["dev", "idea"]  // from --tags flag (array of strings)
+  tags: ["dev", "idea"],  // from --tags flag (array of strings)
+  type: "note"            // from config defaults or interactive prompts
 }
 ```
 

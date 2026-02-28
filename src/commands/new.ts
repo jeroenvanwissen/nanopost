@@ -1,10 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import prompts from "prompts";
-import { readConfig } from "../core/config";
+import {
+  readConfig,
+  resolvePostTypeConfig,
+  getPostTypes,
+  getDefaultPostType,
+} from "../core/config";
 import { toMarkdown } from "../core/frontmatter";
-import { slugify } from "../core/slug";
-import { formatDateYYYYMMDD } from "../core/time";
+import { slugify, formatFilename } from "../core/slug";
+import { formatDateYYYYMMDD, formatDate } from "../core/time";
 import { openInEditor } from "../core/editor";
 import { loadPlugins, runOnPostSaved } from "../core/plugins";
 import { findProjectRoot, findNanopostDir } from "../core/paths";
@@ -12,8 +17,8 @@ import { hasPipedStdin, readStdin } from "../core/input";
 
 export type NewOptions = {
   title?: string;
-  status?: string;
   tags?: string;
+  type?: string;
   edit?: boolean;
   dryRun?: boolean;
   noPublish?: boolean;
@@ -30,6 +35,51 @@ export async function cmdNew(cwd: string, args: string[], opts: NewOptions) {
   const projectRoot = findProjectRoot(cwd) ?? path.dirname(nanopostDir);
   const config = readConfig(nanopostDir);
 
+  // Determine post type
+  let postType = opts.type;
+
+  // If no type specified, prompt or use default
+  if (!postType) {
+    const availableTypes = getPostTypes(config);
+    const defaultType = getDefaultPostType(config);
+
+    if (availableTypes.length === 0) {
+      console.error("No post types configured. Check your .nanopost/config.json");
+      process.exitCode = 1;
+      return;
+    }
+
+    if (availableTypes.length === 1) {
+      postType = availableTypes[0];
+    } else if (!hasPipedStdin() && args.length === 0) {
+      // Interactive mode - prompt for type
+      const typePrompt = await prompts({
+        type: "select",
+        name: "type",
+        message: "Select post type",
+        choices: availableTypes.map((t) => ({
+          title: t === defaultType ? `${t} (default)` : t,
+          value: t,
+        })),
+        initial: defaultType ? availableTypes.indexOf(defaultType) : 0,
+      });
+
+      postType = typePrompt.type;
+
+      if (!postType) {
+        // User cancelled
+        process.exitCode = 0;
+        return;
+      }
+    } else {
+      // Non-interactive mode - use default type
+      postType = defaultType || availableTypes[0];
+    }
+  }
+
+  // Resolve the type config
+  const typeConfig = resolvePostTypeConfig(config, postType!);
+
   // ---- input selection (contract) ----
   let body = "";
   if (hasPipedStdin()) {
@@ -39,70 +89,140 @@ export async function cmdNew(cwd: string, args: string[], opts: NewOptions) {
   }
 
   let title = (opts.title ?? "").trim();
-  let status = (opts.status ?? "").trim();
   let tags: string[] = parseTags(opts.tags);
+  const customFields: Record<string, unknown> = {};
 
   if (!body) {
-    // interactive
-    const res = await prompts([
-      {
+    // interactive — build prompts dynamically from type config frontmatter defaults
+    const defaults = typeConfig.frontmatter?.defaults ?? {};
+    const autoFields = new Set(["title", "date"]);
+    const dynamicKeys: string[] = [];
+    const promptList: prompts.PromptObject[] = [];
+
+    // Always prompt title first (unless provided via CLI)
+    if (!title) {
+      promptList.push({
         type: "text",
         name: "title",
         message: "Title (optional)",
         initial: "",
-      },
-      {
-        type: "text",
-        name: "status",
-        message: "Status (optional)",
-        initial: "",
-      },
-      {
-        type: "text",
-        name: "tags",
-        message: "Tags (comma-separated, optional)",
-        initial: "",
-      },
-      {
+      });
+    }
+
+    // Dynamic prompts for each frontmatter default field
+    for (const [key, defaultValue] of Object.entries(defaults)) {
+      if (autoFields.has(key)) continue;
+
+      // Skip fields already provided via CLI
+      if (key === "tags" && tags.length) continue;
+
+      dynamicKeys.push(key);
+
+      if (key === "tags") {
+        const initial = Array.isArray(defaultValue)
+          ? defaultValue.join(", ")
+          : String(defaultValue ?? "");
+        promptList.push({
+          type: "text",
+          name: "tags",
+          message: "Tags (comma-separated, optional)",
+          initial,
+        });
+      } else {
+        promptList.push({
+          type: "text",
+          name: key,
+          message: `${key.charAt(0).toUpperCase() + key.slice(1)} (optional)`,
+          initial: String(defaultValue ?? ""),
+        });
+      }
+    }
+
+    // Only prompt body inline if --edit is not set
+    if (!opts.edit) {
+      promptList.push({
         type: "text",
         name: "body",
         message: "Body",
         initial: "",
-      },
-    ]);
+      });
+    }
+
+    const res = await prompts(promptList);
 
     title = title || String(res.title ?? "").trim();
-    status = status || String(res.status ?? "").trim();
-    tags = tags.length ? tags : parseTags(String(res.tags ?? ""));
-    body = String(res.body ?? "").trim();
+
+    // Collect dynamic field values
+    for (const key of dynamicKeys) {
+      if (key === "tags") {
+        tags = tags.length ? tags : parseTags(String(res.tags ?? ""));
+      } else {
+        const val = String(res[key] ?? "").trim();
+        if (val) customFields[key] = val;
+      }
+    }
+
+    if (!opts.edit) {
+      body = String(res.body ?? "").trim();
+    }
   }
 
   if (opts.edit) {
-    body = openInEditor(body || "", config.editor);
+    body = openInEditor(body || "", typeConfig.editor);
   }
 
   if (!title) title = deriveTitle(body, hasPipedStdin());
-  const date = formatDateYYYYMMDD(new Date());
+  const now = new Date();
+  const fileDate = formatDateYYYYMMDD(now);
+  const fmDate = formatDate(now, typeConfig.dateFormat ?? "yyyy-MM-dd");
 
-  const maxSlugLen = config.filename?.maxSlugLength ?? 60;
+  const maxSlugLen = typeConfig.filename?.maxSlugLength ?? 60;
   const slug = slugify(title, maxSlugLen);
-  const fileName = `${date}-${slug}.md`;
-  const outDir = path.resolve(projectRoot, config.contentDir);
-  const outPath = path.join(outDir, fileName);
 
+  // Build frontmatter before generating filename (needed for variable substitution)
   const fm: Record<string, unknown> = {
-    ...(config.frontmatter?.defaults ?? {}),
+    ...(typeConfig.frontmatter?.defaults ?? {}),
+    ...customFields,
     title,
-    date,
+    date: fmDate,
   };
 
-  if (status) fm.status = status;
   if (tags.length) fm.tags = tags;
 
-  // Clean up defaults: don't write empty status/tags from defaults unless user wants them
-  // If defaults.status exists but user didn't specify status, keep it (that's intentional).
-  // If you want to omit defaults entirely, remove defaults from config.
-  const md = toMarkdown(fm, body);
+  // Generate filename based on format template
+  const filenameFormat = typeConfig.filename?.format ?? "date-slug";
+  let fileName: string;
+
+  if (filenameFormat === "date-slug") {
+    // Legacy format for backward compatibility
+    fileName = `${fileDate}-${slug}.md`;
+  } else {
+    // Variable-based format (e.g., "{date}-{title}")
+    // Build variables object with common fields + frontmatter fields
+    const variables: Record<string, string> = {
+      date: fileDate,
+      title,
+      slug,
+    };
+
+    // Add frontmatter fields as potential variables
+    for (const [key, value] of Object.entries(fm)) {
+      if (typeof value === "string") {
+        variables[key] = value;
+      }
+    }
+
+    fileName = formatFilename(filenameFormat, variables, maxSlugLen);
+    // Ensure .md extension
+    if (!fileName.endsWith(".md")) {
+      fileName += ".md";
+    }
+  }
+
+  const outDir = path.resolve(projectRoot, typeConfig.contentDir);
+  const outPath = path.join(outDir, fileName);
+
+  const md = toMarkdown(fm, body, typeConfig.frontmatter?.schema);
 
   if (opts.dryRun) {
     process.stdout.write(md);

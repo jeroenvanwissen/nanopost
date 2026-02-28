@@ -20,6 +20,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["dist/", "node_modules/", "coverage/", ".agents/", "examples/", "*.config.*"],
+    ignores: ["dist/", "node_modules/", "coverage/", "examples/", "*.config.*"],
   },
 );

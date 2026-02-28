@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { slugify } from "./slug";
+import { slugify, formatFilename } from "./slug";
 
 describe("slugify", () => {
   it("converts a simple string to a slug", () => {
@@ -45,5 +45,72 @@ describe("slugify", () => {
     const long = "a-b-".repeat(30);
     const result = slugify(long);
     expect(result.length).toBeLessThanOrEqual(60);
+  });
+});
+
+describe("formatFilename", () => {
+  it("formats filename with date and title variables", () => {
+    const result = formatFilename("{date}-{title}", {
+      date: "2023-01-01",
+      title: "New Website",
+      slug: "new-website",
+    });
+    expect(result).toBe("2023-01-01-new-website");
+  });
+
+  it("formats filename with date and slug variables", () => {
+    const result = formatFilename("{date}-{slug}", {
+      date: "2023-01-01",
+      title: "New Website",
+      slug: "new-website",
+    });
+    expect(result).toBe("2023-01-01-new-website");
+  });
+
+  it("slugifies title variable", () => {
+    const result = formatFilename("{date}-{title}", {
+      date: "2023-01-01",
+      title: "Hello World!",
+      slug: "hello-world",
+    });
+    expect(result).toBe("2023-01-01-hello-world");
+  });
+
+  it("respects maxSlugLength for title", () => {
+    const longTitle = "a".repeat(100);
+    const result = formatFilename(
+      "{date}-{title}",
+      { date: "2023-01-01", title: longTitle, slug: longTitle },
+      10,
+    );
+    expect(result).toBe("2023-01-01-aaaaaaaaaa");
+  });
+
+  it("supports custom variables", () => {
+    const result = formatFilename("{date}-{type}-{title}", {
+      date: "2023-01-01",
+      title: "Post",
+      slug: "post",
+      type: "devlog",
+    });
+    expect(result).toBe("2023-01-01-devlog-post");
+  });
+
+  it("handles templates without variables", () => {
+    const result = formatFilename("static-filename", {
+      date: "2023-01-01",
+      title: "Post",
+      slug: "post",
+    });
+    expect(result).toBe("static-filename");
+  });
+
+  it("handles multiple instances of same variable", () => {
+    const result = formatFilename("{date}/{date}-{title}", {
+      date: "2023-01-01",
+      title: "Post",
+      slug: "post",
+    });
+    expect(result).toBe("2023-01-01/2023-01-01-post");
   });
 });

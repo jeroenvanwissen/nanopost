@@ -3,6 +3,29 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+/**
+ * Opens an existing file directly in the editor. After the editor closes,
+ * reads the file back and returns the updated content.
+ * Returns null if no editor is configured.
+ */
+export function editExistingFile(filePath: string, editorCmd?: string): string | null {
+  const editor = editorCmd?.trim() || process.env.EDITOR || process.env.VISUAL;
+  if (!editor) {
+    return null;
+  }
+
+  const parts = editor.split(" ").filter(Boolean);
+  const cmd = parts[0];
+  const args = [...parts.slice(1), filePath];
+
+  const res = spawnSync(cmd, args, { stdio: "inherit" });
+  if (res.error) {
+    throw new Error(`Failed to open editor: ${res.error.message}`);
+  }
+
+  return fs.readFileSync(filePath, "utf8");
+}
+
 export function openInEditor(initial: string, editorCmd?: string): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nanopost-"));
   const file = path.join(tmpDir, "post.md");

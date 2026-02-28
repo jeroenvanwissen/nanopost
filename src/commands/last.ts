@@ -1,18 +1,21 @@
 import path from "node:path";
-import { spawnSync } from "node:child_process";
-import { readConfig } from "../core/config";
+import { readConfig, getPostTypes } from "../core/config";
+import { editExistingFile } from "../core/editor";
+import { parseFrontmatter } from "../core/frontmatter";
 import { findNanopostDir, findProjectRoot } from "../core/paths";
-import { scanPosts } from "../core/posts";
+import { loadPlugins, runOnPostSaved } from "../core/plugins";
+import { scanPosts, type Post } from "../core/posts";
 
 /** Options for the last command. */
 export type LastOptions = {
   edit?: boolean;
   path?: boolean;
   json?: boolean;
+  type?: string;
 };
 
 /** Shows the most recent post, with options to edit or output as JSON. */
-export function cmdLast(cwd: string, opts: LastOptions): void {
+export async function cmdLast(cwd: string, opts: LastOptions): Promise<void> {
   const nanopostDir = findNanopostDir(cwd);
   if (!nanopostDir) {
     console.error("No .nanopost directory found. Run `nanopost init` in your project root.");
@@ -22,15 +25,39 @@ export function cmdLast(cwd: string, opts: LastOptions): void {
 
   const projectRoot = findProjectRoot(cwd) ?? path.dirname(nanopostDir);
   const config = readConfig(nanopostDir);
-  const contentDir = path.resolve(projectRoot, config.contentDir);
-  const posts = scanPosts(contentDir);
 
-  if (posts.length === 0) {
+  const allPosts: Post[] = [];
+
+  // Scan all post types or filter by type
+  const postTypes = getPostTypes(config);
+  const typesToScan = opts.type ? [opts.type] : postTypes;
+
+  for (const typeName of typesToScan) {
+    if (!config.postTypes[typeName]) {
+      console.error(`Error: Post type "${typeName}" not found in configuration.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    const typeConfig = config.postTypes[typeName];
+    const contentDir = path.resolve(projectRoot, typeConfig.contentDir);
+    const posts = scanPosts(contentDir);
+    allPosts.push(...posts);
+  }
+
+  // Sort by date descending (newest first)
+  allPosts.sort((a, b) => {
+    const dateA = new Date(a.date);
+    const dateB = new Date(b.date);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  if (allPosts.length === 0) {
     console.log("No posts found.");
     return;
   }
 
-  const last = posts[0];
+  const last = allPosts[0];
 
   if (opts.path) {
     console.log(last.path);
@@ -43,7 +70,23 @@ export function cmdLast(cwd: string, opts: LastOptions): void {
   }
 
   if (opts.edit) {
-    openExistingInEditor(last.path, config.editor);
+    const updated = editExistingFile(last.path, config.editor);
+    if (updated === null) {
+      console.error("No editor configured. Set editor in config.json or $EDITOR.");
+      process.exitCode = 1;
+      return;
+    }
+
+    const { frontmatter, body } = parseFrontmatter(updated);
+    const plugins = loadPlugins(nanopostDir, config.plugins);
+    await runOnPostSaved(plugins, {
+      filePath: last.path,
+      projectRoot,
+      nanopostDir,
+      config,
+      frontmatter,
+      body,
+    });
     return;
   }
 
@@ -51,25 +94,5 @@ export function cmdLast(cwd: string, opts: LastOptions): void {
   if (last.body) {
     console.log();
     console.log(last.body);
-  }
-}
-
-/** Opens an existing file in the configured editor. */
-function openExistingInEditor(filePath: string, editorCmd?: string): void {
-  const editor = editorCmd?.trim() || process.env.EDITOR || process.env.VISUAL;
-  if (!editor) {
-    console.error("No editor configured. Set editor in config.json or $EDITOR.");
-    process.exitCode = 1;
-    return;
-  }
-
-  const parts = editor.split(" ").filter(Boolean);
-  const cmd = parts[0];
-  const args = [...parts.slice(1), filePath];
-
-  const res = spawnSync(cmd, args, { stdio: "inherit" });
-  if (res.error) {
-    console.error(`Failed to open editor: ${res.error.message}`);
-    process.exitCode = 1;
   }
 }

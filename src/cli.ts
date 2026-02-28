@@ -4,13 +4,16 @@ import { cmdNew, type NewOptions } from "./commands/new";
 import { cmdDoctor, printDoctorResults } from "./commands/doctor";
 import { cmdList } from "./commands/list";
 import { cmdLast } from "./commands/last";
+import { cmdEdit } from "./commands/edit";
 
 const program = new Command();
 
 program
   .name("nanopost")
   .description("Write small thoughts. Commit them to your repo.")
-  .version("0.1.0");
+  .version("0.2.3")
+  .enablePositionalOptions()
+  .passThroughOptions();
 
 program
   .command("init")
@@ -24,9 +27,9 @@ program
 program
   .command("new")
   .description("Create a new nanopost post (interactive)")
-  .option("--title <title>", "override title")
-  .option("--status <status>", "set status")
+  .option("--title <words...>", "override title")
   .option("--tags <tags>", "comma-separated tags")
+  .option("--type <type>", "post type to create")
   .option("--edit", "open editor to edit body")
   .option("--dry-run", "print markdown to stdout without writing")
   .option("--no-publish", "do not run plugins after saving")
@@ -48,11 +51,13 @@ program
   .option("--limit <n>", "show only the first N posts", parseInt)
   .option("--json", "output as JSON array")
   .option("--grep <text>", "filter posts by title or body text")
+  .option("--type <type>", "filter by post type")
   .action((opts) => {
     cmdList(process.cwd(), {
       limit: opts.limit,
       json: !!opts.json,
       grep: opts.grep,
+      type: opts.type,
     });
   });
 
@@ -62,27 +67,35 @@ program
   .option("--edit", "open the last post in your editor")
   .option("--path", "print only the file path")
   .option("--json", "output as JSON")
-  .action((opts) => {
-    cmdLast(process.cwd(), {
+  .option("--type <type>", "filter by post type")
+  .action(async (opts) => {
+    await cmdLast(process.cwd(), {
       edit: !!opts.edit,
       path: !!opts.path,
       json: !!opts.json,
+      type: opts.type,
     });
   });
 
 // Default command (inline / piped / interactive)
 program
   .argument("[text...]", "inline post text")
-  .option("--title <title>", "override title")
-  .option("--status <status>", "set status")
+  .option("--title <words...>", "override title")
   .option("--tags <tags>", "comma-separated tags")
+  .option("--type <type>", "post type to create")
   .option("--edit", "open editor to edit body")
   .option("--dry-run", "print markdown to stdout without writing")
   .option("--no-publish", "do not run plugins after saving")
   .action(async (text: string[], opts) => {
+    // If a single argument is a path to an existing .md file with --edit, edit it
+    const hasArgs = (text?.length ?? 0) > 0;
+    if (hasArgs && opts.edit && text.length === 1) {
+      await cmdEdit(process.cwd(), text[0]);
+      return;
+    }
+
     // If no args and no stdin: show help (not interactive) to keep contract clean.
     // Users can run `nanopost new` for interactive.
-    const hasArgs = (text?.length ?? 0) > 0;
     const hasStdin = !process.stdin.isTTY;
     if (!hasArgs && !hasStdin) {
       program.help();
@@ -95,9 +108,9 @@ program.parseAsync(process.argv);
 
 /** Raw option shape from Commander for `new`/default commands. */
 interface CommanderNewOpts {
-  title?: string;
-  status?: string;
+  title?: string[];
   tags?: string;
+  type?: string;
   edit?: boolean;
   dryRun?: boolean;
   /** Commander negated options: --no-publish becomes publish: false */
@@ -106,9 +119,9 @@ interface CommanderNewOpts {
 
 function normalizeNewOpts(opts: CommanderNewOpts): NewOptions {
   return {
-    title: opts.title,
-    status: opts.status,
+    title: opts.title ? opts.title.join(" ") : undefined,
     tags: opts.tags,
+    type: opts.type,
     edit: !!opts.edit,
     dryRun: !!opts.dryRun,
     noPublish: opts.publish === false,
