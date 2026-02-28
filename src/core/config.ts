@@ -27,7 +27,7 @@ export type PostTypeConfig = {
 };
 
 export type NanopostConfig = {
-  defaultType: string;
+  defaultType?: string;
   postTypes: Record<string, PostTypeConfig>;
   editor?: string;
   plugins?: PluginConfig[];
@@ -41,7 +41,6 @@ export const DEFAULT_POST_TYPE_CONFIG: PostTypeConfig = {
 };
 
 export const DEFAULT_CONFIG: NanopostConfig = {
-  defaultType: "default",
   postTypes: {
     default: {
       contentDir: "content/posts",
@@ -70,7 +69,33 @@ export function readConfig(nanopostDir: string): NanopostConfig {
   }
 
   validateConfig(parsed);
-  return deepMerge(DEFAULT_CONFIG, parsed as Record<string, unknown>);
+
+  const parsedConfig = parsed as Record<string, unknown>;
+
+  // Don't use DEFAULT_CONFIG's postTypes - only merge top-level fields
+  const baseWithoutPostTypes: Partial<NanopostConfig> = {
+    editor: DEFAULT_CONFIG.editor,
+    plugins: DEFAULT_CONFIG.plugins,
+  };
+
+  const merged = deepMerge(baseWithoutPostTypes, parsedConfig) as NanopostConfig;
+
+  // Ensure postTypes exists and merge each post type config with defaults
+  if (parsedConfig.postTypes && typeof parsedConfig.postTypes === "object") {
+    merged.postTypes = {};
+    const userPostTypes = parsedConfig.postTypes as Record<string, unknown>;
+
+    for (const [typeName, typeConfig] of Object.entries(userPostTypes)) {
+      if (typeConfig && typeof typeConfig === "object") {
+        merged.postTypes[typeName] = deepMerge(
+          DEFAULT_POST_TYPE_CONFIG,
+          typeConfig as Record<string, unknown>,
+        ) as PostTypeConfig;
+      }
+    }
+  }
+
+  return merged;
 }
 
 export function writeConfig(nanopostDir: string, cfg: NanopostConfig) {
@@ -132,17 +157,17 @@ export function validateConfig(raw: unknown): void {
     }
   }
 
-  // Require defaultType
-  if (!("defaultType" in obj)) {
-    throw new Error("Invalid config: defaultType is required");
-  }
+  // Validate defaultType if present
+  if ("defaultType" in obj) {
+    if (typeof obj.defaultType !== "string") {
+      throw new Error("Invalid config: defaultType must be a string");
+    }
 
-  if (typeof obj.defaultType !== "string") {
-    throw new Error("Invalid config: defaultType must be a string");
-  }
-
-  if (!(obj.defaultType in postTypes)) {
-    throw new Error(`Invalid config: defaultType "${obj.defaultType}" does not exist in postTypes`);
+    if (!(obj.defaultType in postTypes)) {
+      throw new Error(
+        `Invalid config: defaultType "${obj.defaultType}" does not exist in postTypes`,
+      );
+    }
   }
 
   // Validate optional fields
@@ -221,5 +246,16 @@ export function getPostTypes(config: NanopostConfig): string[] {
 
 /** Gets the default post type from config. */
 export function getDefaultPostType(config: NanopostConfig): string {
-  return config.defaultType;
+  // If defaultType is specified, use it
+  if (config.defaultType) {
+    return config.defaultType;
+  }
+
+  // Otherwise, use the first (or only) post type
+  const types = Object.keys(config.postTypes);
+  if (types.length === 0) {
+    throw new Error("No post types defined in configuration");
+  }
+
+  return types[0];
 }

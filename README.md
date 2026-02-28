@@ -91,6 +91,8 @@ Nanopost supports multiple post types, allowing you to organize different kinds 
 - Frontmatter schema and defaults
 - Date format
 
+The `defaultType` field is optional - if not specified, nanopost will use the first (or only) post type in your configuration.
+
 **Example configuration:**
 
 ```json

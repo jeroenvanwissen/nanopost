@@ -2,7 +2,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { readConfig, writeConfig, validateConfig, deepMerge, DEFAULT_CONFIG } from "./config";
+import {
+  readConfig,
+  writeConfig,
+  validateConfig,
+  deepMerge,
+  DEFAULT_CONFIG,
+  getDefaultPostType,
+} from "./config";
 
 describe("readConfig", () => {
   let tmpDir: string;
@@ -86,6 +93,21 @@ describe("readConfig", () => {
 
     const result = readConfig(tmpDir);
     expect(result.postTypes.default.contentDir).toBe("my-posts");
+  });
+
+  it("accepts config without defaultType", () => {
+    const configWithoutDefault = {
+      postTypes: { blog: { contentDir: "content/posts" } },
+    };
+    fs.writeFileSync(
+      path.join(tmpDir, "config.json"),
+      JSON.stringify(configWithoutDefault),
+      "utf8",
+    );
+
+    const result = readConfig(tmpDir);
+    expect(result.postTypes.blog.contentDir).toBe("content/posts");
+    expect(getDefaultPostType(result)).toBe("blog");
   });
 });
 
@@ -227,5 +249,47 @@ describe("deepMerge", () => {
     const base = { a: 1 };
     const override = { b: 2 };
     expect(deepMerge(base, override)).toEqual({ a: 1, b: 2 });
+  });
+});
+
+describe("getDefaultPostType", () => {
+  it("returns first post type when defaultType is not specified", () => {
+    const config = {
+      postTypes: {
+        blog: { contentDir: "content/blog" },
+        article: { contentDir: "content/articles" },
+      },
+    };
+    const result = getDefaultPostType(config);
+    expect(result).toBe("blog");
+  });
+
+  it("returns the only post type when there's only one", () => {
+    const config = {
+      postTypes: {
+        post: { contentDir: "content/posts" },
+      },
+    };
+    const result = getDefaultPostType(config);
+    expect(result).toBe("post");
+  });
+
+  it("returns explicit defaultType when specified", () => {
+    const config = {
+      defaultType: "article",
+      postTypes: {
+        blog: { contentDir: "content/blog" },
+        article: { contentDir: "content/articles" },
+      },
+    };
+    const result = getDefaultPostType(config);
+    expect(result).toBe("article");
+  });
+
+  it("throws when postTypes is empty", () => {
+    const config = {
+      postTypes: {},
+    };
+    expect(() => getDefaultPostType(config)).toThrow("No post types defined");
   });
 });
